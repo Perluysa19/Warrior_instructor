@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Administradores</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <h1>Lista de Administradores</h1>
+    <button onclick="openCreateModal()">Crear Administrador</button>
+    <div id="alert-modal-overlay" class="alert-modal-overlay">
+      <div id="alert-modal" class="alert-modal">
+        <button class="close-modal-btn" onclick="closeAlertModal()">&times;</button>
+        <span id="alert-modal-message"></span>
+      </div>
+    </div>
+    <table id="adminsTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Usuario</th>
+          <th>Contraseña (hash)</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Los administradores se cargarán aquí -->
+      </tbody>
+    </table>
+    <!-- Modal Crear -->
+    <div class="modal" id="modalCreate">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalCreate')">&times;</button>
+        <h2>Crear Administrador</h2>
+        <form id="createFormModal">
+          <input type="text" id="newName" placeholder="Usuario" required>
+          <input type="password" id="newPassword" placeholder="Contraseña" required>
+          <select id="newStatus">
+            <option value="1">Activo</option>
+            <option value="0">Sin acceso</option>
+          </select>
+          <div class="modal-actions">
+            <button type="submit">Crear</button>
+            <button type="button" onclick="closeModal('modalCreate')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Editar -->
+    <div class="modal" id="modalEdit">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalEdit')">&times;</button>
+        <h2>Editar Administrador</h2>
+        <form id="editFormModal">
+          <input type="hidden" id="editId">
+          <input type="text" id="editName" placeholder="Usuario" required>
+          <select id="editStatus">
+            <option value="1">Activo</option>
+            <option value="0">Sin acceso</option>
+          </select>
+          <div class="modal-actions">
+            <button type="submit">Guardar</button>
+            <button type="button" onclick="closeModal('modalEdit')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Eliminar -->
+    <div class="modal" id="modalDelete">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalDelete')">&times;</button>
+        <h2>Eliminar Administrador</h2>
+        <p>¿Seguro que deseas eliminar este administrador?</p>
+        <div class="modal-actions">
+          <button id="confirmDeleteBtn">Eliminar</button>
+          <button onclick="closeModal('modalDelete')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+    <script src="../../js/auth.js"></script>
+    <script>
+      // Cargar sidebar
+      fetch('../admin/sidebar.html')
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById('sidebar-container').innerHTML = html;
+        });
+
+      let adminToDelete = null;
+
+      // Verificar autenticación al cargar la página
+      if (!auth.requireAuth()) {
+        // Si no está autenticado, auth.js ya redirigirá al login
+        throw new Error('No autenticado');
+      }
+
+      function openCreateModal() {
+        document.getElementById('modalCreate').style.display = 'flex';
+      }
+      function openEditModal(admin) {
+        document.getElementById('editId').value = admin.Admin_id;
+        document.getElementById('editName').value = admin.Admin_name;
+        document.getElementById('editStatus').value = admin.status;
+        document.getElementById('modalEdit').style.display = 'flex';
+      }
+      function openDeleteModal(id) {
+        adminToDelete = id;
+        document.getElementById('modalDelete').style.display = 'flex';
+      }
+      function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        adminToDelete = null;
+      }
+
+      function showAlert(message, type) {
+        const overlay = document.getElementById('alert-modal-overlay');
+        const modal = document.getElementById('alert-modal');
+        const msg = document.getElementById('alert-modal-message');
+        msg.textContent = message;
+        modal.className = 'alert-modal';
+        if (type === 'error') modal.classList.add('alert-error');
+        if (type === 'success') modal.classList.add('alert-success');
+        overlay.style.display = 'flex';
+      }
+      function closeAlertModal() {
+        document.getElementById('alert-modal-overlay').style.display = 'none';
+      }
+
+      async function loadAdmins() {
+        const tableBody = document.querySelector('#adminsTable tbody');
+        tableBody.innerHTML = '';
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/admin', {
+            headers: auth.getAuthHeaders()
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            if (res.status === 401) {
+              // Token expirado o inválido
+              auth.logout();
+              return;
+            }
+            throw new Error(data.error || 'Error al cargar administradores');
+          }
+          if (!data.data || data.data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5">No hay administradores</td></tr>';
+            return;
+          }
+          data.data.forEach(admin => {
+            const estado = (admin.status === 1 || admin.status === "1") ? 'Activo' : 'Sin acceso';
+            const passwordMasked = admin.Admin_password ? '*'.repeat(admin.Admin_password.length) : '';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${admin.Admin_id || ''}</td>
+              <td>${admin.Admin_name || ''}</td>
+              <td>${passwordMasked}</td>
+              <td>${estado}</td>
+              <td class="actions">
+                <button onclick='openEditModal(${JSON.stringify(admin)})'>Editar</button>
+                <button onclick='openDeleteModal(${admin.Admin_id})'>Eliminar</button>
+              </td>
+            `;
+            tableBody.appendChild(tr);
+          });
+        } catch (err) {
+          showAlert('Error al cargar los administradores: ' + err.message, 'error');
+        }
+      }
+
+      // Crear administrador
+      document.getElementById('createFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const admin_name = document.getElementById('newName').value;
+        const admin_password = document.getElementById('newPassword').value;
+        const status = document.getElementById('newStatus').value;
+        // Validación de contraseña
+        if (!admin_password || admin_password.length < 6) {
+          showAlert('La contraseña debe tener al menos 6 caracteres.', 'error');
+          return;
+        }
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/admin', {
+            method: 'POST',
+            headers: auth.getAuthHeaders(),
+            body: JSON.stringify({ admin_name, admin_password, status: Number(status) })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadAdmins();
+            closeModal('modalCreate');
+            this.reset();
+            showAlert('Administrador creado con éxito', 'success');
+          } else {
+            showAlert(data.error || 'Error al crear administrador', 'error');
+          }
+        } catch (err) {
+          showAlert('Error al crear administrador: ' + err.message, 'error');
+        }
+      };
+
+      // Editar administrador
+      document.getElementById('editFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const admin_name = document.getElementById('editName').value;
+        const status = document.getElementById('editStatus').value;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/admin/${id}`, {
+            method: 'PUT',
+            headers: auth.getAuthHeaders(),
+            body: JSON.stringify({ admin_name, status: Number(status) })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadAdmins();
+            closeModal('modalEdit');
+            showAlert('Administrador editado con éxito', 'success');
+          } else {
+            showAlert(data.error || 'Error al editar administrador', 'error');
+          }
+        } catch (err) {
+          showAlert('Error al editar administrador: ' + err.message, 'error');
+        }
+      };
+
+      // Eliminar administrador
+      document.getElementById('confirmDeleteBtn').onclick = async function() {
+        if (!adminToDelete) return;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/admin/${adminToDelete}`, { 
+            method: 'DELETE',
+            headers: auth.getAuthHeaders()
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadAdmins();
+            closeModal('modalDelete');
+            showAlert('Administrador eliminado con éxito', 'success');
+          } else {
+            // Mensaje amigable en alerta
+            showAlert('No se pudo eliminar el administrador. Puede estar relacionado con otros registros o no existir.', 'error');
+          }
+        } catch (err) {
+          showAlert('No se pudo eliminar el administrador. Intenta de nuevo.', 'error');
+        }
+      };
+
+      window.onload = loadAdmins;
+    </script>
+  </div>
+</body>
+</html> 

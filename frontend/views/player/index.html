@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Jugadores</title>
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎮 Gestión de Jugadores</h1>
+            <p>Administra los jugadores del sistema</p>
+        </div>
+
+        <!-- Alert Container -->
+        <div id="alertContainer"></div>
+
+        <!-- Actions Bar -->
+        <div class="actions-bar">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Buscar jugadores...">
+                <button class="btn btn-secondary" onclick="searchPlayers()">Buscar</button>
+            </div>
+            <button class="btn btn-primary" onclick="openCreateModal()">
+                ➕ Nuevo Jugador
+            </button>
+        </div>
+
+        <!-- Table Container -->
+        <div class="table-container">
+            <div id="tableContent">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Cargando jugadores...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="playerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeModal()">&times;</span>
+                <h2 id="modalTitle">Nuevo Jugador</h2>
+            </div>
+            <div class="modal-body">
+                <form id="playerForm">
+                    <div class="form-group">
+                        <label for="player_name">Nombre del Jugador *</label>
+                        <input 
+                            type="text" 
+                            id="player_name" 
+                            name="player_name" 
+                            placeholder="Ingresa el nombre del jugador"
+                            required
+                        >
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="savePlayer()" id="saveBtn">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeDeleteModal()">&times;</span>
+                <h2>Confirmar Eliminación</h2>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que quieres eliminar al jugador <strong id="deletePlayerName"></strong>?</p>
+                <p>Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancelar</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class PlayerManager {
+            constructor() {
+                this.apiUrl = 'http://localhost:3000/api_v1';
+                this.players = [];
+                this.currentPlayerId = null;
+                this.isEditMode = false;
+                this.init();
+            }
+
+            init() {
+                this.checkAuth();
+                this.loadPlayers();
+                this.setupEventListeners();
+            }
+
+            checkAuth() {
+                const token = localStorage.getItem('adminToken');
+                if (!token) {
+                    window.location.href = '../../login.html';
+                    return;
+                }
+            }
+
+            setupEventListeners() {
+                // Search input
+                document.getElementById('searchInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.searchPlayers();
+                    }
+                });
+
+                // Modal close on outside click
+                window.onclick = (event) => {
+                    const modal = document.getElementById('playerModal');
+                    const deleteModal = document.getElementById('deleteModal');
+                    if (event.target === modal) {
+                        this.closeModal();
+                    }
+                    if (event.target === deleteModal) {
+                        this.closeDeleteModal();
+                    }
+                };
+            }
+
+            async loadPlayers() {
+                try {
+                    const response = await fetch(`${this.apiUrl}/player`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.players = data.data || [];
+                        this.renderTable();
+                    } else {
+                        this.showAlert('Error al cargar los jugadores', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showAlert('Error de conexión', 'error');
+                }
+            }
+
+            renderTable() {
+                const container = document.getElementById('tableContent');
+                
+                if (this.players.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h3>No hay jugadores registrados</h3>
+                            <p>Comienza agregando el primer jugador al sistema</p>
+                            <button class="btn btn-primary" onclick="playerManager.openCreateModal()">
+                                ➕ Agregar Jugador
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let tableHTML = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Fecha de Creación</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                this.players.forEach(player => {
+                    const createdDate = new Date(player.created_at).toLocaleDateString('es-ES');
+                    tableHTML += `
+                        <tr>
+                            <td>${player.Player_id}</td>
+                            <td><strong>${player.Player_name}</strong></td>
+                            <td>${createdDate}</td>
+                            <td>
+                                <span class="status-badge status-active">Activo</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-warning" onclick="playerManager.openEditModal(${player.Player_id})">
+                                    ✏️ Editar
+                                </button>
+                                <button class="btn btn-danger" onclick="playerManager.openDeleteModal(${player.Player_id})">
+                                    🗑️ Eliminar
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                tableHTML += `
+                        </tbody>
+                    </table>
+                `;
+
+                container.innerHTML = tableHTML;
+            }
+
+            openCreateModal() {
+                this.isEditMode = false;
+                this.currentPlayerId = null;
+                document.getElementById('modalTitle').textContent = 'Nuevo Jugador';
+                document.getElementById('playerForm').reset();
+                document.getElementById('playerModal').style.display = 'block';
+                document.getElementById('player_name').focus();
+            }
+
+            openEditModal(playerId) {
+                this.isEditMode = true;
+                this.currentPlayerId = playerId;
+                const player = this.players.find(p => p.Player_id === playerId);
+                
+                if (player) {
+                    document.getElementById('modalTitle').textContent = 'Editar Jugador';
+                    document.getElementById('player_name').value = player.Player_name;
+                    document.getElementById('playerModal').style.display = 'block';
+                    document.getElementById('player_name').focus();
+                }
+            }
+
+            openDeleteModal(playerId) {
+                const player = this.players.find(p => p.Player_id === playerId);
+                if (player) {
+                    this.currentPlayerId = playerId;
+                    document.getElementById('deletePlayerName').textContent = player.Player_name;
+                    document.getElementById('deleteModal').style.display = 'block';
+                }
+            }
+
+            closeModal() {
+                document.getElementById('playerModal').style.display = 'none';
+            }
+
+            closeDeleteModal() {
+                document.getElementById('deleteModal').style.display = 'none';
+            }
+
+            async savePlayer() {
+                const playerName = document.getElementById('player_name').value.trim();
+                
+                if (!playerName) {
+                    this.showAlert('Por favor, ingresa el nombre del jugador', 'error');
+                    return;
+                }
+
+                try {
+                    const url = this.isEditMode 
+                        ? `${this.apiUrl}/player/${this.currentPlayerId}`
+                        : `${this.apiUrl}/player`;
+                    
+                    const method = this.isEditMode ? 'PUT' : 'POST';
+                    
+                    const response = await fetch(url, {
+                        method: method,
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ player_name: playerName })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.showAlert(data.message, 'success');
+                        this.closeModal();
+                        this.loadPlayers();
+                    } else {
+                        this.showAlert(data.error || 'Error al guardar el jugador', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showAlert('Error de conexión', 'error');
+                }
+            }
+
+            async confirmDelete() {
+                try {
+                    const response = await fetch(`${this.apiUrl}/player/${this.currentPlayerId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.showAlert(data.message, 'success');
+                        this.closeDeleteModal();
+                        this.loadPlayers();
+                    } else {
+                        this.showAlert(data.error || 'Error al eliminar el jugador', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showAlert('Error de conexión', 'error');
+                }
+            }
+
+            searchPlayers() {
+                const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+                const filteredPlayers = this.players.filter(player => 
+                    player.Player_name.toLowerCase().includes(searchTerm) ||
+                    player.Player_id.toString().includes(searchTerm)
+                );
+                
+                this.renderFilteredTable(filteredPlayers);
+            }
+
+            renderFilteredTable(filteredPlayers) {
+                const container = document.getElementById('tableContent');
+                
+                if (filteredPlayers.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h3>No se encontraron jugadores</h3>
+                            <p>Intenta con otro término de búsqueda</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let tableHTML = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Fecha de Creación</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                filteredPlayers.forEach(player => {
+                    const createdDate = new Date(player.created_at).toLocaleDateString('es-ES');
+                    tableHTML += `
+                        <tr>
+                            <td>${player.Player_id}</td>
+                            <td><strong>${player.Player_name}</strong></td>
+                            <td>${createdDate}</td>
+                            <td>
+                                <span class="status-badge status-active">Activo</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-warning" onclick="playerManager.openEditModal(${player.Player_id})">
+                                    ✏️ Editar
+                                </button>
+                                <button class="btn btn-danger" onclick="playerManager.openDeleteModal(${player.Player_id})">
+                                    🗑️ Eliminar
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                tableHTML += `
+                        </tbody>
+                    </table>
+                `;
+
+                container.innerHTML = tableHTML;
+            }
+
+            showAlert(message, type = 'success') {
+                const alertContainer = document.getElementById('alertContainer');
+                alertContainer.innerHTML = `
+                    <div class="alert alert-${type}">
+                        ${message}
+                    </div>
+                `;
+                
+                setTimeout(() => {
+                    alertContainer.innerHTML = '';
+                }, 3000);
+            }
+        }
+
+        // Global functions for onclick events
+        let playerManager;
+
+        function openCreateModal() {
+            playerManager.openCreateModal();
+        }
+
+        function openEditModal(id) {
+            playerManager.openEditModal(id);
+        }
+
+        function openDeleteModal(id) {
+            playerManager.openDeleteModal(id);
+        }
+
+        function closeModal() {
+            playerManager.closeModal();
+        }
+
+        function closeDeleteModal() {
+            playerManager.closeDeleteModal();
+        }
+
+        function savePlayer() {
+            playerManager.savePlayer();
+        }
+
+        function confirmDelete() {
+            playerManager.confirmDelete();
+        }
+
+        function searchPlayers() {
+            playerManager.searchPlayers();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            playerManager = new PlayerManager();
+        });
+    </script>
+</body>
+</html> 

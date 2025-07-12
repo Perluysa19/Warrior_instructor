@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Tipos de Guerrero</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <h1>Lista de Tipos de Guerrero</h1>
+    <button onclick="openCreateModal()">Crear Tipo de Guerrero</button>
+    
+    <div id="error" class="error"></div>
+    <div id="success" class="success"></div>
+    
+    <table id="warriorTypesTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Los tipos de guerrero se cargarán aquí -->
+      </tbody>
+    </table>
+
+    <!-- Modal Crear -->
+    <div class="modal" id="modalCreate">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalCreate')">&times;</button>
+        <h2>Crear Tipo de Guerrero</h2>
+        <form id="createFormModal">
+          <input type="text" id="newWarriorTypeName" placeholder="Nombre del tipo de guerrero" required>
+          <div class="modal-actions">
+            <button type="submit">Crear</button>
+            <button type="button" onclick="closeModal('modalCreate')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal Editar -->
+    <div class="modal" id="modalEdit">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalEdit')">&times;</button>
+        <h2>Editar Tipo de Guerrero</h2>
+        <form id="editFormModal">
+          <input type="hidden" id="editId">
+          <input type="text" id="editWarriorTypeName" placeholder="Nombre del tipo de guerrero" required>
+          <div class="modal-actions">
+            <button type="submit">Guardar</button>
+            <button type="button" onclick="closeModal('modalEdit')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div class="modal" id="modalDelete">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalDelete')">&times;</button>
+        <h2>Eliminar Tipo de Guerrero</h2>
+        <p>¿Seguro que deseas eliminar este tipo de guerrero?</p>
+        <p><strong>⚠️ Advertencia:</strong> Si hay guerreros usando este tipo, no se podrá eliminar.</p>
+        <div class="modal-actions">
+          <button id="confirmDeleteBtn">Eliminar</button>
+          <button onclick="closeModal('modalDelete')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Cargar sidebar
+      fetch('../admin/sidebar.html')
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById('sidebar-container').innerHTML = html;
+        });
+
+      let warriorTypeToDelete = null;
+
+      function openCreateModal() {
+        document.getElementById('modalCreate').style.display = 'flex';
+      }
+
+      function openEditModal(warriorType) {
+        document.getElementById('editId').value = warriorType.Warrior_type_id;
+        document.getElementById('editWarriorTypeName').value = warriorType.Warrior_type_name;
+        document.getElementById('modalEdit').style.display = 'flex';
+      }
+
+      function openDeleteModal(id) {
+        warriorTypeToDelete = id;
+        document.getElementById('modalDelete').style.display = 'flex';
+      }
+
+      function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        warriorTypeToDelete = null;
+      }
+
+      async function loadWarriorTypes() {
+        const tableBody = document.querySelector('#warriorTypesTable tbody');
+        const errorDiv = document.getElementById('error');
+        const successDiv = document.getElementById('success');
+        
+        tableBody.innerHTML = '';
+        errorDiv.textContent = '';
+        successDiv.textContent = '';
+        
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/warrior_type');
+          const data = await res.json();
+          
+          if (!data.data || data.data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3">No hay tipos de guerrero registrados</td></tr>';
+            return;
+          }
+          
+          data.data.forEach(warriorType => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${warriorType.Warrior_type_id || ''}</td>
+              <td>${warriorType.Warrior_type_name || ''}</td>
+              <td class="actions">
+                <button onclick='openEditModal(${JSON.stringify(warriorType)})'>Editar</button>
+                <button onclick='openDeleteModal(${warriorType.Warrior_type_id})'>Eliminar</button>
+              </td>
+            `;
+            tableBody.appendChild(tr);
+          });
+        } catch (err) {
+          errorDiv.textContent = 'Error al cargar los tipos de guerrero: ' + err.message;
+        }
+      }
+
+      // Crear tipo de guerrero
+      document.getElementById('createFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const Warrior_type_name = document.getElementById('newWarriorTypeName').value;
+        const Admin_id = 1; // Valor por defecto para el administrador
+        
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/warrior_type', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Warrior_type_name, Admin_id })
+          });
+          const data = await res.json();
+          
+          if (res.ok) {
+            document.getElementById('success').textContent = 'Tipo de guerrero creado exitosamente';
+            loadWarriorTypes();
+            closeModal('modalCreate');
+            this.reset();
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al crear tipo de guerrero';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al crear tipo de guerrero: ' + err.message;
+        }
+      };
+
+      // Editar tipo de guerrero
+      document.getElementById('editFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const Warrior_type_name = document.getElementById('editWarriorTypeName').value;
+        const Admin_id = 1; // Valor por defecto para el administrador
+        
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/warrior_type/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Warrior_type_name, Admin_id })
+          });
+          const data = await res.json();
+          
+          if (res.ok) {
+            document.getElementById('success').textContent = 'Tipo de guerrero actualizado exitosamente';
+            loadWarriorTypes();
+            closeModal('modalEdit');
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al actualizar tipo de guerrero';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al actualizar tipo de guerrero: ' + err.message;
+        }
+      };
+
+      // Eliminar tipo de guerrero
+      document.getElementById('confirmDeleteBtn').onclick = async function() {
+        if (!warriorTypeToDelete) return;
+        
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/warrior_type/${warriorTypeToDelete}`, {
+            method: 'DELETE'
+          });
+          const data = await res.json();
+          
+          if (res.ok) {
+            document.getElementById('success').textContent = 'Tipo de guerrero eliminado exitosamente';
+            loadWarriorTypes();
+            closeModal('modalDelete');
+          } else {
+            alert('No se pudo eliminar el tipo de guerrero. Puede estar siendo usado por guerreros existentes o no existir.');
+          }
+        } catch (err) {
+          alert('No se pudo eliminar el tipo de guerrero. Intenta de nuevo.');
+        }
+      };
+
+      window.onload = loadWarriorTypes;
+    </script>
+  </div>
+</body>
+</html> 

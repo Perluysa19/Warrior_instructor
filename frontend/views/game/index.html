@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Juegos</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <h1>Lista de Juegos</h1>
+    <button onclick="openCreateModal()">Crear Juego</button>
+    <div id="error" class="error"></div>
+    <table id="gamesTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Público</th>
+          <th>Código</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Los juegos se cargarán aquí -->
+      </tbody>
+    </table>
+    <!-- Modal Crear -->
+    <div class="modal" id="modalCreate">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalCreate')">&times;</button>
+        <h2>Crear Juego</h2>
+        <form id="createFormModal">
+          <input type="text" id="newName" placeholder="Nombre" required>
+          <select id="newPublic">
+            <option value="1">Sí</option>
+            <option value="0">No</option>
+          </select>
+          <input type="text" id="newCode" placeholder="Código">
+          <div class="modal-actions">
+            <button type="submit">Crear</button>
+            <button type="button" onclick="closeModal('modalCreate')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Editar -->
+    <div class="modal" id="modalEdit">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalEdit')">&times;</button>
+        <h2>Editar Juego</h2>
+        <form id="editFormModal">
+          <input type="hidden" id="editId">
+          <input type="text" id="editName" placeholder="Nombre" required>
+          <select id="editPublic">
+            <option value="1">Sí</option>
+            <option value="0">No</option>
+          </select>
+          <input type="text" id="editCode" placeholder="Código">
+          <div class="modal-actions">
+            <button type="submit">Guardar</button>
+            <button type="button" onclick="closeModal('modalEdit')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Eliminar -->
+    <div class="modal" id="modalDelete">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalDelete')">&times;</button>
+        <h2>Eliminar Juego</h2>
+        <p>¿Seguro que deseas eliminar este juego?</p>
+        <div class="modal-actions">
+          <button id="confirmDeleteBtn">Eliminar</button>
+          <button onclick="closeModal('modalDelete')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Cargar sidebar
+      fetch('../admin/sidebar.html')
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById('sidebar-container').innerHTML = html;
+        });
+
+      let gameToDelete = null;
+
+      function openCreateModal() {
+        document.getElementById('modalCreate').style.display = 'flex';
+      }
+      function openEditModal(game) {
+        document.getElementById('editId').value = game.Game_id;
+        document.getElementById('editName').value = game.Game_name;
+        document.getElementById('editPublic').value = game.Game_Public;
+        document.getElementById('editCode').value = game.Game_Code || '';
+        document.getElementById('modalEdit').style.display = 'flex';
+      }
+      function openDeleteModal(id) {
+        gameToDelete = id;
+        document.getElementById('modalDelete').style.display = 'flex';
+      }
+      function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        gameToDelete = null;
+      }
+
+      async function loadGames() {
+        const tableBody = document.querySelector('#gamesTable tbody');
+        const errorDiv = document.getElementById('error');
+        tableBody.innerHTML = '';
+        errorDiv.textContent = '';
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/game');
+          const data = await res.json();
+          if (!data.data || data.data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5">No hay juegos</td></tr>';
+            return;
+          }
+          data.data.forEach(game => {
+            const publico = (game.Game_Public === 1 || game.Game_Public === "1") ? 'Sí' : 'No';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${game.Game_id || ''}</td>
+              <td>${game.Game_name || ''}</td>
+              <td>${publico}</td>
+              <td>${game.Game_Code || ''}</td>
+              <td class="actions">
+                <button onclick='openEditModal(${JSON.stringify(game)})'>Editar</button>
+                <button onclick='openDeleteModal(${game.Game_id})'>Eliminar</button>
+              </td>
+            `;
+            tableBody.appendChild(tr);
+          });
+        } catch (err) {
+          errorDiv.textContent = 'Error al cargar los juegos: ' + err.message;
+        }
+      }
+
+      // Crear juego
+      document.getElementById('createFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const game_name = document.getElementById('newName').value;
+        const game_public = document.getElementById('newPublic').value;
+        const game_code = document.getElementById('newCode').value;
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/game', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_name, game_public: Number(game_public), game_code })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadGames();
+            closeModal('modalCreate');
+            this.reset();
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al crear juego';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al crear juego: ' + err.message;
+        }
+      };
+
+      // Editar juego
+      document.getElementById('editFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const game_name = document.getElementById('editName').value;
+        const game_public = document.getElementById('editPublic').value;
+        const game_code = document.getElementById('editCode').value;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/game/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_name, game_public: Number(game_public), game_code })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadGames();
+            closeModal('modalEdit');
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al editar juego';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al editar juego: ' + err.message;
+        }
+      };
+
+      // Eliminar juego
+      document.getElementById('confirmDeleteBtn').onclick = async function() {
+        if (!gameToDelete) return;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/game/${gameToDelete}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (res.ok) {
+            loadGames();
+            closeModal('modalDelete');
+          } else {
+            alert('No se pudo eliminar el juego. Puede estar relacionado con otros registros o no existir.');
+          }
+        } catch (err) {
+          alert('No se pudo eliminar el juego. Intenta de nuevo.');
+        }
+      };
+
+      window.onload = loadGames;
+    </script>
+  </div>
+</body>
+</html> 

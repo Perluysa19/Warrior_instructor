@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Razas</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <h1>Lista de Razas</h1>
+    <button onclick="openCreateModal()">Crear Raza</button>
+    <div id="error" class="error"></div>
+    <table id="racesTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Las razas se cargarán aquí -->
+      </tbody>
+    </table>
+    <!-- Modal Crear -->
+    <div class="modal" id="modalCreate">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalCreate')">&times;</button>
+        <h2>Crear Raza</h2>
+        <form id="createFormModal">
+          <input type="text" id="newName" placeholder="Nombre de la raza" required>
+          <div class="modal-actions">
+            <button type="submit">Crear</button>
+            <button type="button" onclick="closeModal('modalCreate')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Editar -->
+    <div class="modal" id="modalEdit">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalEdit')">&times;</button>
+        <h2>Editar Raza</h2>
+        <form id="editFormModal">
+          <input type="hidden" id="editId">
+          <input type="text" id="editName" placeholder="Nombre de la raza" required>
+          <div class="modal-actions">
+            <button type="submit">Guardar</button>
+            <button type="button" onclick="closeModal('modalEdit')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Eliminar -->
+    <div class="modal" id="modalDelete">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalDelete')">&times;</button>
+        <h2>Eliminar Raza</h2>
+        <p>¿Seguro que deseas eliminar esta raza?</p>
+        <div class="modal-actions">
+          <button id="confirmDeleteBtn">Eliminar</button>
+          <button onclick="closeModal('modalDelete')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Cargar sidebar
+      fetch('../admin/sidebar.html')
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById('sidebar-container').innerHTML = html;
+        });
+
+      let raceToDelete = null;
+
+      function openCreateModal() {
+        document.getElementById('modalCreate').style.display = 'flex';
+      }
+      function openEditModal(race) {
+        document.getElementById('editId').value = race.Race_id;
+        document.getElementById('editName').value = race.Race_name;
+        document.getElementById('modalEdit').style.display = 'flex';
+      }
+      function openDeleteModal(id) {
+        raceToDelete = id;
+        document.getElementById('modalDelete').style.display = 'flex';
+      }
+      function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        raceToDelete = null;
+      }
+
+      async function loadRaces() {
+        const tableBody = document.querySelector('#racesTable tbody');
+        const errorDiv = document.getElementById('error');
+        tableBody.innerHTML = '';
+        errorDiv.textContent = '';
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/race');
+          const data = await res.json();
+          if (!data.data || data.data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3">No hay razas</td></tr>';
+            return;
+          }
+          data.data.forEach(race => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${race.Race_id || ''}</td>
+              <td>${race.Race_name || ''}</td>
+              <td class="actions">
+                <button onclick='openEditModal(${JSON.stringify(race)})'>Editar</button>
+                <button onclick='openDeleteModal(${race.Race_id})'>Eliminar</button>
+              </td>
+            `;
+            tableBody.appendChild(tr);
+          });
+        } catch (err) {
+          errorDiv.textContent = 'Error al cargar las razas: ' + err.message;
+        }
+      }
+
+      // Crear raza
+      document.getElementById('createFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const Race_name = document.getElementById('newName').value;
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/race', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Race_name })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadRaces();
+            closeModal('modalCreate');
+            this.reset();
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al crear raza';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al crear raza: ' + err.message;
+        }
+      };
+
+      // Editar raza
+      document.getElementById('editFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const Race_name = document.getElementById('editName').value;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/race/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Race_name })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadRaces();
+            closeModal('modalEdit');
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al editar raza';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al editar raza: ' + err.message;
+        }
+      };
+
+      // Eliminar raza
+      document.getElementById('confirmDeleteBtn').onclick = async function() {
+        if (!raceToDelete) return;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/race/${raceToDelete}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (res.ok) {
+            loadRaces();
+            closeModal('modalDelete');
+          } else {
+            alert('No se pudo eliminar la raza. Puede estar relacionada con otros registros o no existir.');
+          }
+        } catch (err) {
+          alert('No se pudo eliminar la raza. Intenta de nuevo.');
+        }
+      };
+
+      window.onload = loadRaces;
+    </script>
+  </div>
+</body>
+</html> 

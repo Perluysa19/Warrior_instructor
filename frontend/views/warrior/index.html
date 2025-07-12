@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Guerreros</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <h1>Lista de Guerreros</h1>
+    <button onclick="openCreateModal()">Crear Guerrero</button>
+    
+    <div id="error" class="error"></div>
+    <div id="success" class="success"></div>
+    
+    <table id="warriorsTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Imagen</th>
+          <th>Nombre</th>
+          <th>Raza</th>
+          <th>Tipo de Guerrero</th>
+          <th>Magia</th>
+          <th>Tipo de Poder</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Los guerreros se cargarán aquí -->
+      </tbody>
+    </table>
+
+    <!-- Modal Crear -->
+    <div class="modal" id="modalCreate">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalCreate')">&times;</button>
+        <h2>Crear Guerrero</h2>
+        <form id="createFormModal" enctype="multipart/form-data">
+          <div class="form-row">
+            <input type="text" id="newWarriorName" placeholder="Nombre del guerrero" required>
+          </div>
+          <div class="form-row">
+            <select id="newRaceId" required>
+              <option value="">Seleccionar Raza</option>
+            </select>
+            <select id="newWarriorTypeId" required>
+              <option value="">Seleccionar Tipo de Guerrero</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <select id="newMagicId">
+              <option value="">Seleccionar Magia (Opcional)</option>
+            </select>
+            <select id="newPowerId" required>
+              <option value="">Seleccionar Poder</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <input type="file" id="newWarriorImage" accept="image/*" placeholder="Imagen del guerrero">
+          </div>
+          <div class="modal-actions">
+            <button type="submit">Crear</button>
+            <button type="button" onclick="closeModal('modalCreate')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal Editar -->
+    <div class="modal" id="modalEdit">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalEdit')">&times;</button>
+        <h2>Editar Guerrero</h2>
+        <form id="editFormModal" enctype="multipart/form-data">
+          <input type="hidden" id="editId">
+          <div class="form-row">
+            <input type="text" id="editWarriorName" placeholder="Nombre del guerrero" required>
+          </div>
+          <div class="form-row">
+            <select id="editRaceId" required>
+              <option value="">Seleccionar Raza</option>
+            </select>
+            <select id="editWarriorTypeId" required>
+              <option value="">Seleccionar Tipo de Guerrero</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <select id="editMagicId">
+              <option value="">Seleccionar Magia</option>
+            </select>
+            <select id="editPowerId" required>
+              <option value="">Seleccionar Poder</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <input type="file" id="editWarriorImage" accept="image/*" placeholder="Imagen del guerrero">
+            <div id="currentImageContainer" style="display: none;">
+              <img id="currentImage" style="max-width: 100px; max-height: 100px; border-radius: 8px;">
+              <p>Imagen actual</p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="submit">Guardar</button>
+            <button type="button" onclick="closeModal('modalEdit')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div class="modal" id="modalDelete">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalDelete')">&times;</button>
+        <h2>Eliminar Guerrero</h2>
+        <p>¿Seguro que deseas eliminar este guerrero?</p>
+        <div class="modal-actions">
+          <button id="confirmDeleteBtn">Eliminar</button>
+          <button onclick="closeModal('modalDelete')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../../js/auth.js"></script>
+    <script>
+      // Cargar sidebar
+      fetch('../admin/sidebar.html')
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById('sidebar-container').innerHTML = html;
+        });
+
+      // Verificar autenticación al cargar la página
+      if (!auth.requireAuth()) {
+        throw new Error('No autenticado');
+      }
+
+      let warriorToDelete = null;
+      let races = [];
+      let warriorTypes = [];
+      let magics = [];
+      let powers = [];
+      let admins = [];
+
+      function openCreateModal() {
+        loadSelects();
+        document.getElementById('modalCreate').style.display = 'flex';
+      }
+
+      function openEditModal(warrior) {
+        loadSelects();
+        document.getElementById('editId').value = warrior.Warrior_id;
+        document.getElementById('editWarriorName').value = warrior.Warrior_name;
+        document.getElementById('editRaceId').value = warrior.Race_id;
+        document.getElementById('editWarriorTypeId').value = warrior.Warrior_type_id;
+        document.getElementById('editMagicId').value = warrior.Magic_id || '';
+        document.getElementById('editPowerId').value = warrior.Power_id || '';
+
+        // Mostrar imagen actual si existe
+        const currentImageContainer = document.getElementById('currentImageContainer');
+        const currentImage = document.getElementById('currentImage');
+        if (warrior.Warrior_image) {
+          currentImage.src = `http://localhost:3000/uploads/warriors/${warrior.Warrior_image}`;
+          currentImageContainer.style.display = 'block';
+        } else {
+          currentImageContainer.style.display = 'none';
+        }
+
+        document.getElementById('modalEdit').style.display = 'flex';
+      }
+
+      function openDeleteModal(id) {
+        warriorToDelete = id;
+        document.getElementById('modalDelete').style.display = 'flex';
+      }
+
+      function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        warriorToDelete = null;
+      }
+
+      async function loadRaces() {
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/race', { headers: auth.getAuthHeaders() });
+          const data = await res.json();
+          races = data.data || [];
+        } catch {}
+      }
+      async function loadWarriorTypes() {
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/warrior_type', { headers: auth.getAuthHeaders() });
+          const data = await res.json();
+          warriorTypes = data.data || [];
+        } catch {}
+      }
+      async function loadMagics() {
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/magic', { headers: auth.getAuthHeaders() });
+          const data = await res.json();
+          magics = data.data || [];
+        } catch {}
+      }
+      async function loadPowers() {
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/power', { headers: auth.getAuthHeaders() });
+          const data = await res.json();
+          powers = data.data || [];
+        } catch {}
+      }
+      async function loadSelects() {
+        await Promise.all([loadRaces(), loadWarriorTypes(), loadMagics(), loadPowers()]);
+        // Llenar selects de creación
+        const raceSelect = document.getElementById('newRaceId');
+        raceSelect.innerHTML = '<option value="">Seleccionar Raza</option>';
+        races.forEach(race => {
+          raceSelect.innerHTML += `<option value="${race.Race_id}">${race.Race_name}</option>`;
+        });
+        const warriorTypeSelect = document.getElementById('newWarriorTypeId');
+        warriorTypeSelect.innerHTML = '<option value="">Seleccionar Tipo de Guerrero</option>';
+        warriorTypes.forEach(type => {
+          warriorTypeSelect.innerHTML += `<option value="${type.Warrior_type_id}">${type.Warrior_type_name}</option>`;
+        });
+        const magicSelect = document.getElementById('newMagicId');
+        magicSelect.innerHTML = '<option value="">Seleccionar Magia </option>';
+        magics.forEach(magic => {
+          magicSelect.innerHTML += `<option value="${magic.Magic_id}">${magic.Magic_type}</option>`;
+        });
+        const powerSelect = document.getElementById('newPowerId');
+        powerSelect.innerHTML = '<option value="">Seleccionar Poder</option>';
+        powers.forEach(power => {
+          powerSelect.innerHTML += `<option value="${power.Power_id}">${power.Power_name}</option>`;
+        });
+        // Llenar selects de edición
+        const editRaceSelect = document.getElementById('editRaceId');
+        editRaceSelect.innerHTML = '<option value="">Seleccionar Raza</option>';
+        races.forEach(race => {
+          editRaceSelect.innerHTML += `<option value="${race.Race_id}">${race.Race_name}</option>`;
+        });
+        const editWarriorTypeSelect = document.getElementById('editWarriorTypeId');
+        editWarriorTypeSelect.innerHTML = '<option value="">Seleccionar Tipo de Guerrero</option>';
+        warriorTypes.forEach(type => {
+          editWarriorTypeSelect.innerHTML += `<option value="${type.Warrior_type_id}">${type.Warrior_type_name}</option>`;
+        });
+        const editMagicSelect = document.getElementById('editMagicId');
+        editMagicSelect.innerHTML = '<option value="">Seleccionar Magia (Opcional)</option>';
+        magics.forEach(magic => {
+          editMagicSelect.innerHTML += `<option value="${magic.Magic_id}">${magic.Magic_type}</option>`;
+        });
+        const editPowerSelect = document.getElementById('editPowerId');
+        editPowerSelect.innerHTML = '<option value="">Seleccionar Poder</option>';
+        powers.forEach(power => {
+          editPowerSelect.innerHTML += `<option value="${power.Power_id}">${power.Power_name}</option>`;
+        });
+      }
+
+      async function loadWarriors() {
+        const tableBody = document.querySelector('#warriorsTable tbody');
+        const errorDiv = document.getElementById('error');
+        const successDiv = document.getElementById('success');
+        tableBody.innerHTML = '';
+        errorDiv.textContent = '';
+        successDiv.textContent = '';
+        try {
+          await loadPowers();
+          const res = await fetch('http://localhost:3000/api_v1/warrior', {
+            headers: auth.getAuthHeaders()
+          });
+          const data = await res.json();
+          if (!data.data || data.data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="8">No hay guerreros registrados</td></tr>';
+            return;
+          }
+          data.data.forEach(warrior => {
+            const tr = document.createElement('tr');
+            const imageUrl = warrior.Warrior_image ? `http://localhost:3000/uploads/warriors/${warrior.Warrior_image}` : 'http://localhost:3000/uploads/warriors/default-warrior.jpg';
+            tr.innerHTML = `
+              <td>${warrior.Warrior_id || ''}</td>
+              <td><img src="${imageUrl}" alt="${warrior.Warrior_name}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;"></td>
+              <td>${warrior.Warrior_name || ''}</td>
+              <td>${getRaceName(warrior.Race_id) || ''}</td>
+              <td>${getWarriorTypeName(warrior.Warrior_type_id) || ''}</td>
+              <td>${getMagicName(warrior.Magic_id) || 'Sin magia'}</td>
+              <td>${getPowerName(warrior.Power_id)}</td>
+              <td class="actions">
+                <button onclick='openEditModal(${JSON.stringify(warrior)})'>Editar</button>
+                <button onclick='openDeleteModal(${warrior.Warrior_id})'>Eliminar</button>
+              </td>
+            `;
+            tableBody.appendChild(tr);
+          });
+        } catch (err) {
+          errorDiv.textContent = 'Error al cargar los guerreros: ' + err.message;
+        }
+      }
+
+      function getRaceName(raceId) {
+        const race = races.find(r => r.Race_id == raceId);
+        return race ? race.Race_name : '';
+      }
+      function getWarriorTypeName(typeId) {
+        const type = warriorTypes.find(t => t.Warrior_type_id == typeId);
+        return type ? type.Warrior_type_name : '';
+      }
+      function getMagicName(magicId) {
+        if (!magicId) return '';
+        const magic = magics.find(m => m.Magic_id == magicId);
+        return magic ? magic.Magic_name : '';
+      }
+      function getPowerName(id) {
+        if (!id) return 'Sin poder';
+        const power = powers.find(p => p.Power_id == id);
+        return power ? power.Power_name : 'Sin poder';
+      }
+
+      // Crear guerrero
+      document.getElementById('createFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const warrior_name = document.getElementById('newWarriorName').value;
+        const race_id = document.getElementById('newRaceId').value;
+        const warrior_type_id = document.getElementById('newWarriorTypeId').value;
+        const magic_id = document.getElementById('newMagicId').value || null;
+        const power_id = document.getElementById('newPowerId').value;
+        const admin_id = 1; // Valor por defecto para el administrador
+        const warrior_image = document.getElementById('newWarriorImage').files[0];
+        if (!power_id) {
+          document.getElementById('error').textContent = 'Selecciona un poder.';
+          return;
+        }
+        try {
+          const formData = new FormData();
+          formData.append('warrior_name', warrior_name);
+          formData.append('race_id', race_id);
+          formData.append('warrior_type_id', warrior_type_id);
+          formData.append('magic_id', magic_id || '');
+          formData.append('power_id', power_id);
+          formData.append('admin_id', admin_id);
+          if (warrior_image) {
+            formData.append('warrior_image', warrior_image);
+          }
+          const res = await fetch('http://localhost:3000/api_v1/warrior', {
+            method: 'POST',
+            headers: auth.getAuthHeaders(),
+            body: formData
+          });
+          const data = await res.json();
+          if (res.ok) {
+            document.getElementById('success').textContent = 'Guerrero creado exitosamente';
+            loadWarriors();
+            closeModal('modalCreate');
+            this.reset();
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al crear guerrero';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al crear guerrero: ' + err.message;
+        }
+      };
+
+      // Editar guerrero
+      document.getElementById('editFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const warrior_name = document.getElementById('editWarriorName').value;
+        const race_id = document.getElementById('editRaceId').value;
+        const warrior_type_id = document.getElementById('editWarriorTypeId').value;
+        const magic_id = document.getElementById('editMagicId').value || null;
+        const power_id = document.getElementById('editPowerId').value;
+        const admin_id = 1; // Valor por defecto para el administrador
+        const warrior_image = document.getElementById('editWarriorImage').files[0];
+        if (!power_id) {
+          document.getElementById('error').textContent = 'Selecciona un poder.';
+          return;
+        }
+        try {
+          const formData = new FormData();
+          formData.append('warrior_name', warrior_name);
+          formData.append('race_id', race_id);
+          formData.append('warrior_type_id', warrior_type_id);
+          formData.append('magic_id', magic_id || '');
+          formData.append('power_id', power_id);
+          formData.append('admin_id', admin_id);
+          if (warrior_image) {
+            formData.append('warrior_image', warrior_image);
+          }
+          const res = await fetch(`http://localhost:3000/api_v1/warrior/${id}`, {
+            method: 'PUT',
+            headers: auth.getAuthHeaders(),
+            body: formData
+          });
+          const data = await res.json();
+          if (res.ok) {
+            document.getElementById('success').textContent = 'Guerrero actualizado exitosamente';
+            loadWarriors();
+            closeModal('modalEdit');
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al actualizar guerrero';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al actualizar guerrero: ' + err.message;
+        }
+      };
+
+      // Eliminar guerrero
+      document.getElementById('confirmDeleteBtn').onclick = async function() {
+        if (!warriorToDelete) return;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/warrior/${warriorToDelete}`, {
+            method: 'DELETE',
+            headers: auth.getAuthHeaders()
+          });
+          const data = await res.json();
+          if (res.ok) {
+            document.getElementById('success').textContent = 'Guerrero eliminado exitosamente';
+            loadWarriors();
+            closeModal('modalDelete');
+          } else {
+            alert('No se pudo eliminar el guerrero. Puede estar relacionado con otros registros o no existir.');
+          }
+        } catch (err) {
+          alert('No se pudo eliminar el guerrero. Intenta de nuevo.');
+        }
+      };
+
+      window.onload = function() {
+        loadSelects();
+        loadWarriors();
+      };
+    </script>
+  </div>
+</body>
+</html> 

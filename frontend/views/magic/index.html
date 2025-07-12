@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Magias</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <h1>Lista de Magias</h1>
+    <button onclick="openCreateModal()">Crear Magia</button>
+    <div id="error" class="error"></div>
+    <table id="magicsTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Tipo</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Las magias se cargarán aquí -->
+      </tbody>
+    </table>
+    <!-- Modal Crear -->
+    <div class="modal" id="modalCreate">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalCreate')">&times;</button>
+        <h2>Crear Magia</h2>
+        <form id="createFormModal">
+          <input type="text" id="newType" placeholder="Tipo de magia" required>
+          <div class="modal-actions">
+            <button type="submit">Crear</button>
+            <button type="button" onclick="closeModal('modalCreate')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Editar -->
+    <div class="modal" id="modalEdit">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalEdit')">&times;</button>
+        <h2>Editar Magia</h2>
+        <form id="editFormModal">
+          <input type="hidden" id="editId">
+          <input type="text" id="editType" placeholder="Tipo de magia" required>
+          <div class="modal-actions">
+            <button type="submit">Guardar</button>
+            <button type="button" onclick="closeModal('modalEdit')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Eliminar -->
+    <div class="modal" id="modalDelete">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalDelete')">&times;</button>
+        <h2>Eliminar Magia</h2>
+        <p>¿Seguro que deseas eliminar esta magia?</p>
+        <div class="modal-actions">
+          <button id="confirmDeleteBtn">Eliminar</button>
+          <button onclick="closeModal('modalDelete')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Cargar sidebar
+      fetch('../admin/sidebar.html')
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById('sidebar-container').innerHTML = html;
+        });
+
+      let magicToDelete = null;
+
+      function openCreateModal() {
+        document.getElementById('modalCreate').style.display = 'flex';
+      }
+      function openEditModal(magic) {
+        document.getElementById('editId').value = magic.Magic_id;
+        document.getElementById('editType').value = magic.Magic_type;
+        document.getElementById('modalEdit').style.display = 'flex';
+      }
+      function openDeleteModal(id) {
+        magicToDelete = id;
+        document.getElementById('modalDelete').style.display = 'flex';
+      }
+      function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        magicToDelete = null;
+      }
+
+      async function loadMagics() {
+        const tableBody = document.querySelector('#magicsTable tbody');
+        const errorDiv = document.getElementById('error');
+        tableBody.innerHTML = '';
+        errorDiv.textContent = '';
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/magic');
+          const data = await res.json();
+          if (!data.data || data.data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3">No hay magias</td></tr>';
+            return;
+          }
+          data.data.forEach(magic => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${magic.Magic_id || ''}</td>
+              <td>${magic.Magic_type || ''}</td>
+              <td class="actions">
+                <button onclick='openEditModal(${JSON.stringify(magic)})'>Editar</button>
+                <button onclick='openDeleteModal(${magic.Magic_id})'>Eliminar</button>
+              </td>
+            `;
+            tableBody.appendChild(tr);
+          });
+        } catch (err) {
+          errorDiv.textContent = 'Error al cargar las magias: ' + err.message;
+        }
+      }
+
+      // Crear magia
+      document.getElementById('createFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const Magic_type = document.getElementById('newType').value;
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/magic', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Magic_type })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadMagics();
+            closeModal('modalCreate');
+            this.reset();
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al crear magia';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al crear magia: ' + err.message;
+        }
+      };
+
+      // Editar magia
+      document.getElementById('editFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const Magic_type = document.getElementById('editType').value;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/magic/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Magic_type })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadMagics();
+            closeModal('modalEdit');
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al editar magia';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al editar magia: ' + err.message;
+        }
+      };
+
+      // Eliminar magia
+      document.getElementById('confirmDeleteBtn').onclick = async function() {
+        if (!magicToDelete) return;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/magic/${magicToDelete}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (res.ok) {
+            loadMagics();
+            closeModal('modalDelete');
+          } else {
+            alert('No se pudo eliminar la magia. Puede estar relacionada con otros registros o no existir.');
+          }
+        } catch (err) {
+          alert('No se pudo eliminar la magia. Intenta de nuevo.');
+        }
+      };
+
+      window.onload = loadMagics;
+    </script>
+  </div>
+</body>
+</html> 

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login de Jugador</title>
+    <link rel="stylesheet" href="css/player-login.css">
+</head>
+<body>
+    <div class="login-container">
+        <!-- Logo -->
+        <div class="logo">
+            <img src="img/logo.png" alt="Logo del Juego">
+        </div>
+
+        <!-- Título -->
+        <h1 class="title">🎮 Login de Jugador</h1>
+        <p class="subtitle">Ingresa tu nombre para comenzar a jugar</p>
+
+        <!-- Alert Container -->
+        <div id="alertContainer"></div>
+
+        <!-- Login Form -->
+        <form id="playerLoginForm">
+            <div class="form-group">
+                <label for="player_name">Nombre del Jugador *</label>
+                <input 
+                    type="text" 
+                    id="player_name" 
+                    name="player_name" 
+                    placeholder="Ingresa tu nombre de jugador"
+                    required
+                    maxlength="50"
+                    autocomplete="off"
+                >
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="loginBtn">
+                🎮 Entrar al Juego
+            </button>
+        </form>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Registrando jugador...</p>
+        </div>
+
+    </div>
+
+    <script>
+        class PlayerLogin {
+            constructor() {
+                this.apiUrl = 'http://localhost:3000/api_v1';
+                this.currentPlayer = null;
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.checkExistingPlayer();
+            }
+
+            setupEventListeners() {
+                const form = document.getElementById('playerLoginForm');
+                const input = document.getElementById('player_name');
+
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleLogin();
+                });
+
+                // Auto-capitalize first letter
+                input.addEventListener('input', (e) => {
+                    const value = e.target.value;
+                    if (value.length > 0) {
+                        e.target.value = value.charAt(0).toUpperCase() + value.slice(1);
+                    }
+                });
+
+                // Prevent special characters except letters, numbers, and spaces
+                input.addEventListener('keypress', (e) => {
+                    const char = String.fromCharCode(e.which);
+                    if (!/[a-zA-Z0-9\s]/.test(char)) {
+                        e.preventDefault();
+                    }
+                });
+            }
+
+            checkExistingPlayer() {
+                const playerData = localStorage.getItem('playerData');
+                if (playerData) {
+                    const player = JSON.parse(playerData);
+                    this.currentPlayer = player;
+                    // No hay más mensajes de bienvenida, info de jugador, etc.
+                }
+            }
+
+            async handleLogin() {
+                const playerName = document.getElementById('player_name').value.trim();
+                
+                if (!playerName) {
+                    this.showAlert('Por favor, ingresa tu nombre de jugador', 'error');
+                    return;
+                }
+
+                if (playerName.length < 2) {
+                    this.showAlert('El nombre debe tener al menos 2 caracteres', 'error');
+                    return;
+                }
+
+                this.showLoading(true);
+
+                try {
+                    const response = await fetch(`${this.apiUrl}/player`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ player_name: playerName })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Buscar el jugador recién creado para obtener sus datos completos
+                        const playerResponse = await fetch(`${this.apiUrl}/player`);
+                        const playersData = await playerResponse.json();
+                        
+                        if (playersData.data) {
+                            const newPlayer = playersData.data.find(p => p.Player_name === playerName);
+                            if (newPlayer) {
+                                this.currentPlayer = newPlayer;
+                                this.savePlayerData(newPlayer);
+                                // No hay más mensajes de bienvenida, info de jugador, etc.
+                                this.showAlert('¡Jugador registrado exitosamente!', 'success');
+                            }
+                        }
+                    } else {
+                        if (response.status === 409) {
+                            // El jugador ya existe, buscar sus datos
+                            const playerResponse = await fetch(`${this.apiUrl}/player`);
+                            const playersData = await playerResponse.json();
+                            
+                            if (playersData.data) {
+                                const existingPlayer = playersData.data.find(p => p.Player_name === playerName);
+                                if (existingPlayer) {
+                                    this.currentPlayer = existingPlayer;
+                                    this.savePlayerData(existingPlayer);
+                                    // No hay más mensajes de bienvenida, info de jugador, etc.
+                                    this.showAlert('¡Bienvenido de vuelta!', 'success');
+                                }
+                            }
+                        } else {
+                            this.showAlert(data.error || 'Error al registrar el jugador', 'error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showAlert('Error de conexión. Verifica que el servidor esté funcionando.', 'error');
+                } finally {
+                    this.showLoading(false);
+                }
+            }
+
+            savePlayerData(player) {
+                localStorage.setItem('playerData', JSON.stringify(player));
+                localStorage.setItem('playerToken', 'player_' + player.Player_id); // Token simple para jugadores
+            }
+
+            showLoading(show) {
+                const loading = document.getElementById('loading');
+                const loginBtn = document.getElementById('loginBtn');
+                
+                if (show) {
+                    loading.style.display = 'block';
+                    if (loginBtn) {
+                        loginBtn.disabled = true;
+                        loginBtn.textContent = 'Procesando...';
+                    }
+                } else {
+                    loading.style.display = 'none';
+                    if (loginBtn) {
+                        loginBtn.disabled = false;
+                        loginBtn.textContent = '🎮 Entrar al Juego';
+                    }
+                }
+            }
+
+            showAlert(message, type = 'success') {
+                const alertContainer = document.getElementById('alertContainer');
+                alertContainer.innerHTML = `
+                    <div class="alert alert-${type}">
+                        ${message}
+                    </div>
+                `;
+                
+                setTimeout(() => {
+                    alertContainer.innerHTML = '';
+                }, 5000);
+            }
+        }
+
+        // Global functions for onclick events
+        let playerLogin;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            playerLogin = new PlayerLogin();
+        });
+    </script>
+</body>
+</html> 

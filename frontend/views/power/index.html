@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Poderes</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <h1>Lista de Poderes</h1>
+    <button onclick="openCreateModal()">Crear Poder</button>
+    <div id="error" class="error"></div>
+    <table id="powersTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Los poderes se cargarán aquí -->
+      </tbody>
+    </table>
+    <!-- Modal Crear -->
+    <div class="modal" id="modalCreate">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalCreate')">&times;</button>
+        <h2>Crear Poder</h2>
+        <form id="createFormModal">
+          <input type="text" id="newName" placeholder="Nombre del poder" required>
+          <div class="modal-actions">
+            <button type="submit">Crear</button>
+            <button type="button" onclick="closeModal('modalCreate')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Editar -->
+    <div class="modal" id="modalEdit">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalEdit')">&times;</button>
+        <h2>Editar Poder</h2>
+        <form id="editFormModal">
+          <input type="hidden" id="editId">
+          <input type="text" id="editName" placeholder="Nombre del poder" required>
+          <div class="modal-actions">
+            <button type="submit">Guardar</button>
+            <button type="button" onclick="closeModal('modalEdit')">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- Modal Eliminar -->
+    <div class="modal" id="modalDelete">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('modalDelete')">&times;</button>
+        <h2>Eliminar Poder</h2>
+        <p>¿Seguro que deseas eliminar este poder?</p>
+        <div class="modal-actions">
+          <button id="confirmDeleteBtn">Eliminar</button>
+          <button onclick="closeModal('modalDelete')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Cargar sidebar
+      fetch('../admin/sidebar.html')
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById('sidebar-container').innerHTML = html;
+        });
+
+      let powerToDelete = null;
+
+      function openCreateModal() {
+        document.getElementById('modalCreate').style.display = 'flex';
+      }
+      function openEditModal(power) {
+        document.getElementById('editId').value = power.Power_id;
+        document.getElementById('editName').value = power.Power_name;
+        document.getElementById('modalEdit').style.display = 'flex';
+      }
+      function openDeleteModal(id) {
+        powerToDelete = id;
+        document.getElementById('modalDelete').style.display = 'flex';
+      }
+      function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        powerToDelete = null;
+      }
+
+      async function loadPowers() {
+        const tableBody = document.querySelector('#powersTable tbody');
+        const errorDiv = document.getElementById('error');
+        tableBody.innerHTML = '';
+        errorDiv.textContent = '';
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/power');
+          const data = await res.json();
+          if (!data.data || data.data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3">No hay poderes</td></tr>';
+            return;
+          }
+          data.data.forEach(power => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${power.Power_id || ''}</td>
+              <td>${power.Power_name || ''}</td>
+              <td class="actions">
+                <button onclick='openEditModal(${JSON.stringify(power)})'>Editar</button>
+                <button onclick='openDeleteModal(${power.Power_id})'>Eliminar</button>
+              </td>
+            `;
+            tableBody.appendChild(tr);
+          });
+        } catch (err) {
+          errorDiv.textContent = 'Error al cargar los poderes: ' + err.message;
+        }
+      }
+
+      // Crear poder
+      document.getElementById('createFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const Power_name = document.getElementById('newName').value;
+        try {
+          const res = await fetch('http://localhost:3000/api_v1/power', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Power_name })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadPowers();
+            closeModal('modalCreate');
+            this.reset();
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al crear poder';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al crear poder: ' + err.message;
+        }
+      };
+
+      // Editar poder
+      document.getElementById('editFormModal').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const Power_name = document.getElementById('editName').value;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/power/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Power_name })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            loadPowers();
+            closeModal('modalEdit');
+          } else {
+            document.getElementById('error').textContent = data.error || 'Error al editar poder';
+          }
+        } catch (err) {
+          document.getElementById('error').textContent = 'Error al editar poder: ' + err.message;
+        }
+      };
+
+      // Eliminar poder
+      document.getElementById('confirmDeleteBtn').onclick = async function() {
+        if (!powerToDelete) return;
+        try {
+          const res = await fetch(`http://localhost:3000/api_v1/power/${powerToDelete}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (res.ok) {
+            loadPowers();
+            closeModal('modalDelete');
+          } else {
+            alert('No se pudo eliminar el poder. Puede estar relacionado con otros registros o no existir.');
+          }
+        } catch (err) {
+          alert('No se pudo eliminar el poder. Intenta de nuevo.');
+        }
+      };
+
+      window.onload = loadPowers;
+    </script>
+  </div>
+</body>
+</html> 

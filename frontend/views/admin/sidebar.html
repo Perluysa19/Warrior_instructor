@@ -1,0 +1,36 @@
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <a href="../dashboard/index.html">
+      <img src="../../img/logo.png" alt="Logo" style="width: 120px; display: block; margin: 0 auto 1.5rem auto; background: linear-gradient(120deg, #f8e1f4 0%, #e0f7fa 100%); border-radius: 18px; box-shadow: 0 2px 12px #a259c633; padding: 10px;">
+    </a>
+  </div>
+  <ul>
+    <li><a href="../admin/index.html" id="link-admin">Administradores</a></li>
+    <li><a href="../game/index.html" id="link-game">Juegos</a></li>
+    <li><a href="../magic/index.html" id="link-magic">Magia</a></li>
+    <li><a href="../power/index.html" id="link-power">Poderes</a></li>
+    <li><a href="../race/index.html" id="link-race">Razas</a></li>
+    <li><a href="../warrior/index.html" id="link-warrior">Guerreros</a></li>
+    <li><a href="../warrior_type/index.html" id="link-warrior-type">Tipos de Guerrero</a></li>
+  </ul>
+</div>
+<link rel="stylesheet" href="../../css/sidebar.css">
+<script>
+  // Resalta el enlace activo según la URL actual
+  const path = window.location.pathname;
+  if (path.includes('/admin/')) {
+    document.getElementById('link-admin')?.classList.add('active');
+  } else if (path.includes('/game/')) {
+    document.getElementById('link-game')?.classList.add('active');
+  } else if (path.includes('/magic/')) {
+    document.getElementById('link-magic')?.classList.add('active');
+  } else if (path.includes('/power/')) {
+    document.getElementById('link-power')?.classList.add('active');
+  } else if (path.includes('/race/')) {
+    document.getElementById('link-race')?.classList.add('active');
+  } else if (path.includes('/warrior/')) {
+    document.getElementById('link-warrior')?.classList.add('active');
+  } else if (path.includes('/warrior_type/')) {
+    document.getElementById('link-warrior-type')?.classList.add('active');
+  }
+</script> 

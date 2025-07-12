@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sistema de Gestión</title>
+    <link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>🔐 Sistema de Gestión</h1>
+            <p>Acceso Administrativo</p>
+        </div>
+        
+        <div class="login-body">
+            <div id="alertContainer"></div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="admin_name">Usuario Administrador</label>
+                    <input 
+                        type="text" 
+                        id="admin_name" 
+                        name="admin_name" 
+                        placeholder="Ingresa tu usuario"
+                        required
+                        autocomplete="username"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="admin_password">Contraseña</label>
+                    <input 
+                        type="password" 
+                        id="admin_password" 
+                        name="admin_password" 
+                        placeholder="Ingresa tu contraseña"
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
+                
+                <button type="submit" class="login-btn" id="loginBtn">
+                    <span class="loading" id="loading">
+                        <span class="spinner"></span>
+                        Iniciando sesión...
+                    </span>
+                    <span class="normal" id="normal">
+                        Iniciar Sesión
+                    </span>
+                </button>
+            </form>
+        </div>
+        
+        <div class="footer">
+            <p>Solo administradores autorizados pueden acceder</p>
+            <p>© 2025 Sistema de Gestión</p>
+        </div>
+    </div>
+
+    <script>
+        class LoginManager {
+            constructor() {
+                this.apiUrl = 'http://localhost:3000/api_v1';
+                this.init();
+            }
+
+            init() {
+                this.loginForm = document.getElementById('loginForm');
+                this.loginBtn = document.getElementById('loginBtn');
+                this.loading = document.getElementById('loading');
+                this.normal = document.getElementById('normal');
+                this.alertContainer = document.getElementById('alertContainer');
+                
+                this.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+                
+                // Verificar si ya hay una sesión activa
+                this.checkExistingSession();
+                
+                // Focus en el primer campo
+                document.getElementById('admin_name').focus();
+            }
+
+            checkExistingSession() {
+                const token = localStorage.getItem('adminToken');
+                if (token) {
+                    this.showAlert('Ya tienes una sesión activa. Redirigiendo...', 'success');
+                    setTimeout(() => {
+                        window.location.href = './views/dashboard/index.html';
+                    }, 1500);
+                }
+            }
+
+            showAlert(message, type = 'error') {
+                this.alertContainer.innerHTML = `
+                    <div class="alert alert-${type} show">
+                        ${message}
+                    </div>
+                `;
+                
+                // Auto-hide success messages
+                if (type === 'success') {
+                    setTimeout(() => {
+                        this.alertContainer.innerHTML = '';
+                    }, 3000);
+                }
+            }
+
+            setLoading(loading) {
+                if (loading) {
+                    this.loading.classList.add('show');
+                    this.normal.style.display = 'none';
+                    this.loginBtn.disabled = true;
+                } else {
+                    this.loading.classList.remove('show');
+                    this.normal.style.display = 'inline';
+                    this.loginBtn.disabled = false;
+                }
+            }
+
+            async handleLogin(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this.loginForm);
+                const admin_name = formData.get('admin_name').trim();
+                const admin_password = formData.get('admin_password');
+
+                // Validaciones básicas
+                if (!admin_name || !admin_password) {
+                    this.showAlert('Por favor, completa todos los campos');
+                    return;
+                }
+
+                if (admin_name.length < 3) {
+                    this.showAlert('El usuario debe tener al menos 3 caracteres');
+                    return;
+                }
+
+                if (admin_password.length < 6) {
+                    this.showAlert('La contraseña debe tener al menos 6 caracteres');
+                    return;
+                }
+
+                this.setLoading(true);
+
+                try {
+                    const response = await fetch(`${this.apiUrl}/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            admin_name,
+                            admin_password
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Guardar token y datos del admin
+                        localStorage.setItem('adminToken', data.admin.token);
+                        localStorage.setItem('adminData', JSON.stringify({
+                            id: data.admin.id,
+                            name: data.admin.admin_name
+                        }));
+                        
+                        this.showAlert('¡Inicio de sesión exitoso! Redirigiendo...', 'success');
+                        
+                        setTimeout(() => {
+                            window.location.href = './views/dashboard/index.html';
+                        }, 1500);
+                    } else {
+                        this.showAlert(data.error || 'Credenciales incorrectas');
+                        // Limpiar contraseña en caso de error
+                        document.getElementById('admin_password').value = '';
+                        document.getElementById('admin_password').focus();
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showAlert('Error de conexión. Verifica que el servidor esté funcionando.');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+        }
+
+        // Inicializar el sistema de login
+        document.addEventListener('DOMContentLoaded', () => {
+            new LoginManager();
+        });
+
+        // Prevenir envío con Enter en campos individuales
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+                e.preventDefault();
+                document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+            }
+        });
+    </script>
+</body>
+</html> 
